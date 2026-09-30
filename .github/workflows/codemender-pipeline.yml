@@ -1,8 +1,6 @@
-name: CodeMender CI/CD Guardrail
-
 # ---------------------------------------------------------------------------
 # Module 2 Lab — autonomous security scanning + remediation with Google
-# CodeMender (the `cm` CLI), wired as a CI/CD deployment guardrail.
+# CodeMender (the cm CLI), wired as a CI/CD deployment guardrail.
 #
 # Flow (one push to main demonstrates all four grading criteria):
 #   checkout -> install cm -> cm init -> narrow scope (park unlisted files)
@@ -12,7 +10,7 @@ name: CodeMender CI/CD Guardrail
 #
 # Auth (KEYLESS — Workload Identity Federation; see lab/README.md Step 2):
 #   * No service-account key exists anywhere in this design. The runner mints
-#     a GitHub OIDC token (`id-token: write` below) and the auth step
+#     a GitHub OIDC token (id-token: write below) and the auth step
 #     exchanges it for short-lived credentials of the CI service account,
 #     via the pool/provider created by lab/setup-wif.sh. Three repo
 #     VARIABLES (plain config, not secrets) wire it up:
@@ -21,14 +19,14 @@ name: CodeMender CI/CD Guardrail
 #       GCP_QUOTA_PROJECT — project that absorbs Vertex AI quota/billing
 #     plus ONE repo SECRET:
 #       WIF_AUDIENCE      — class-shared audience string the provider requires
-#                           in the OIDC token (`aud` claim). Keeps strangers
+#                           in the OIDC token (aud claim). Keeps strangers
 #                           who merely name a repo ace-module2-lab from riding
 #                           the fixed-name admission rule. From the lab page.
 #     The SA needs BOTH roles/aiplatform.user AND
 #     roles/serviceusage.serviceUsageConsumer — aiplatform.user does NOT
 #     include serviceusage.services.use, and without the second role ADC
 #     fails with "Grant the caller the roles/serviceusage.serviceUsageConsumer
-#     role". `cm` (v0.2.0) reads ADC + GOOGLE_CLOUD_PROJECT, both exported
+#     role". cm (v0.2.0) reads ADC + GOOGLE_CLOUD_PROJECT, both exported
 #     by the auth step. Proven against the real cm backend by
 #     .github/workflows/wif-auth-test.yml.
 #   * GITHUB_TOKEN    — built-in; used to open the remediation pull request.
@@ -42,9 +40,9 @@ on:
       - 'lab/**'
       - '.gitignore'
   workflow_dispatch:
-  # Note: no `pull_request:` trigger — it produced branch-less red runs on the
+  # Note: no pull_request: trigger — it produced branch-less red runs on the
   # bot-authored remediation PR and GitHub "action_required" approval prompts.
-  # The fix/PR steps keep `github.event_name != 'pull_request'` guards, so a
+  # The fix/PR steps keep github.event_name != 'pull_request' guards, so a
   # pull_request trigger can be safely re-added here to gate PRs if desired.
 
 permissions:
@@ -53,12 +51,12 @@ permissions:
   id-token: write          # mint the GitHub OIDC token WIF exchanges for GCP creds
 
 env:
-  # Scan root (a flat directory — `cm fix` relies on that, see the fix step).
+  # Scan root (a flat directory — cm fix relies on that, see the fix step).
   # cm also uses this as its read sandbox, so "SANDBOX VIOLATION ... blocked"
   # lines in the scan log are EXPECTED and benign — the agent tried to follow
   # an import outside routes/ (e.g. ../lib) and was denied; the scan continues.
   # Keeping the sandbox tight = shorter, cheaper scans. To widen context later:
-  # `cm find` accepts repeated --allowed-roots <dir> flags (never pass the repo
+  # cm find accepts repeated --allowed-roots <dir> flags (never pass the repo
   # root — the WIF credential file gha-creds-*.json lands there and anything
   # in-sandbox is uploadable by the agent).
   SCAN_PATH: routes
@@ -75,7 +73,7 @@ env:
   # search.ts), XXE / Zip-Slip / YAML-DoS (fileUpload.ts), server-side
   # template injection + eval (userProfile.ts), path traversal (dataErasure.ts).
   SCAN_FILES: "login.ts search.ts fileUpload.ts userProfile.ts dataErasure.ts"
-  # The `cm` binary ships vendored in the repo, so template copies work with
+  # The cm binary ships vendored in the repo, so template copies work with
   # zero extra setup (GitHub does NOT copy Releases on fork/template — a
   # release-download step here broke every student copy).
   CM_BUNDLED: lab/bin/cm-linux
@@ -119,7 +117,7 @@ jobs:
       # Exchanges the runner's OIDC token for short-lived SA credentials,
       # writes the ADC credential file, and exports
       # GOOGLE_APPLICATION_CREDENTIALS + GOOGLE_CLOUD_PROJECT for all later
-      # steps — exactly what `cm` reads. No key is involved at any point.
+      # steps — exactly what cm reads. No key is involved at any point.
       - name: Authenticate to Google Cloud (WIF / ADC)
         uses: google-github-actions/auth@v2
         with:
@@ -127,7 +125,7 @@ jobs:
           service_account: ${{ vars.GCP_SA_EMAIL }}
           project_id: ${{ vars.GCP_QUOTA_PROJECT }}
           # Class-shared audience: the provider only accepts OIDC tokens
-          # minted with this `aud` value (second factor next to the repo name).
+          # minted with this aud value (second factor next to the repo name).
           audience: ${{ secrets.WIF_AUDIENCE }}
 
       - name: Install CodeMender CLI (cm)
@@ -137,7 +135,7 @@ jobs:
             echo "::error title=cm binary missing::$CM_BUNDLED not found in this repo. Copy the template repo fully (it ships the binary) — see lab/INSTRUCTOR.md."
             exit 1
           fi
-          # Copy out of the checkout so later steps get a stable `cm` on PATH
+          # Copy out of the checkout so later steps get a stable cm on PATH
           # and the working tree stays clean for the remediation diff.
           mkdir -p "$RUNNER_TEMP/cmbin"
           install -m 0755 "$CM_BUNDLED" "$RUNNER_TEMP/cmbin/cm"
@@ -155,7 +153,7 @@ jobs:
           ls -la "$HOME/.codemender/" 2>/dev/null || echo "::warning::~/.codemender was not created by cm init."
 
       # Park every file in SCAN_PATH that is NOT listed in SCAN_FILES so that
-      # `cm find` only uploads (and spends quota on) the listed files. The
+      # cm find only uploads (and spends quota on) the listed files. The
       # parked files come back in "Restore unscanned files" below, which runs
       # even when the scan or fix fails; and the PR step only ever adds the
       # listed files, so a parked file can never show up as a deletion in the
@@ -183,7 +181,7 @@ jobs:
           for P in "$SCAN_PATH"/*; do
             F="$(basename "$P")"
             case " $SCAN_FILES " in
-              *" $F "*) KEPT=$((KEPT + 1)) ;;
+              " $F ") KEPT=$((KEPT + 1)) ;;
               *)        mv "$P" "$PARK/"; PARKED=$((PARKED + 1)) ;;
             esac
           done
@@ -195,7 +193,6 @@ jobs:
         run: |
           set -uo pipefail
           echo "Scanning '$SCAN_PATH' — files: $SCAN_FILES (in-scope source is uploaded to Google's CodeMender service)..."
-          cm find "$SCAN_PATH" -y 2>&1 | tee "$RUNNER_TEMP/cm-find.cm.log"
 
       - name: Export Security Report (cm report -f json)
         if: ${{ always() && steps.scan.conclusion != 'skipped' }}
@@ -222,7 +219,6 @@ jobs:
       - name: Autonomous Remediation (cm fix, top-N)
         id: fix
         # Open a remediation PR on push or manual run; PR events only scan+gate.
-        if: ${{ github.event_name != 'pull_request' && steps.triage.outputs.fix_ids != '' }}
         run: |
           set -uo pipefail
           echo "Remediating top finding(s): ${{ steps.triage.outputs.fix_ids }}"
@@ -230,7 +226,7 @@ jobs:
             echo "::group::cm fix $FID"
             # Run cm from INSIDE $SCAN_PATH. cm records each finding's path
             # relative to the scan root it was found under — usually a bare
-            # basename ("search.ts") — but `cm fix` stats that path against the
+            # basename ("search.ts") — but cm fix stats that path against the
             # process CWD. From the repo root that resolves to ./search.ts,
             # which doesn't exist, and cm dies in milliseconds with
             #   Error: acquiring write lock on search.ts: stat search.ts: ...
@@ -247,7 +243,7 @@ jobs:
             if grep -q "acquiring write lock" "$RUNNER_TEMP/fix-$FID.cm.log"; then
               echo "::warning title=cm fix could not open the target file::$FID — cm could not resolve its recorded file path from $SCAN_PATH; no patch was produced for this finding."
             fi
-            # In a non-interactive CI shell, `cm fix` reliably PRINTS the patch but
+            # In a non-interactive CI shell, cm fix reliably PRINTS the patch but
             # may not write it (its "Apply these changes? [y/N]" prompt reads EOF).
             # Extract the printed diff and apply it ONLY if it applies cleanly — so
             # this is a no-op when cm already wrote the file itself. cm prints diff
@@ -267,7 +263,6 @@ jobs:
       # working tree differs from HEAD only by cm's patches. Runs on failure
       # too (the PR step below only adds SCAN_FILES regardless).
       - name: Restore unscanned files
-        if: ${{ always() && steps.scope.outputs.park_dir != '' }}
         run: |
           set -euo pipefail
           PARK="${{ steps.scope.outputs.park_dir }}"
@@ -293,7 +288,7 @@ jobs:
           commit-message: |
             fix(security): CodeMender autonomous remediation
 
-            Patches generated by `cm fix` for the top ${{ steps.triage.outputs.fix_count }} HIGH/CRITICAL finding(s).
+            Patches generated by cm fix for the top ${{ steps.triage.outputs.fix_count }} HIGH/CRITICAL finding(s).
           title: "🤖 CodeMender: autonomous security remediation (${{ steps.triage.outputs.fix_count }} fix(es))"
           labels: |
             security
@@ -302,18 +297,18 @@ jobs:
           body: |
             ## 🤖 Autonomous remediation by CodeMender
 
-            CodeMender's CI/CD guardrail scanned `${{ env.SCAN_PATH }}`
-            (files: `${{ env.SCAN_FILES }}`) and found
+            CodeMender's CI/CD guardrail scanned ${{ env.SCAN_PATH }}
+            (files: ${{ env.SCAN_FILES }}) and found
             **${{ steps.triage.outputs.high_critical }} HIGH/CRITICAL** finding(s).
-            This PR auto-remediates the top **${{ steps.triage.outputs.fix_count }}** via `cm fix`:
+            This PR auto-remediates the top **${{ steps.triage.outputs.fix_count }}** via cm fix:
 
             ${{ steps.triage.outputs.fix_summary }}
 
             ---
-            Full machine-readable report: the **`codemender-report`** artifact on
+            Full machine-readable report: the **codemender-report** artifact on
             [run #${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
 
-            > ⚠️ Review before merging. The pipeline run on `main` stays **red** until
+            > ⚠️ Review before merging. The pipeline run on main stays **red** until
             > the HIGH/CRITICAL findings are resolved — that is the deployment gate.
 
       - name: Security Gate (fail on HIGH/CRITICAL)
@@ -323,14 +318,5 @@ jobs:
           # Fail CLOSED: no completed scan/triage means no evidence the code is
           # safe — that blocks deployment too. (A gate that passes green when
           # the scanner crashed would wave unscanned code through.)
-          if [ "${{ steps.triage.outcome }}" != "success" ]; then
-            echo "::error title=Deployment blocked::Security scan did not complete (triage outcome: ${{ steps.triage.outcome }}). Failing closed — no scan, no deploy."
-            exit 1
-          fi
-          COUNT="${{ steps.triage.outputs.high_critical }}"
-          COUNT="${COUNT:-0}"
-          if [ "$COUNT" -gt 0 ]; then
-            echo "::error title=Deployment blocked::CodeMender found $COUNT HIGH/CRITICAL finding(s). Failing the pipeline."
-            exit 1
-          fi
-          echo "No HIGH/CRITICAL findings — security gate passed. ✅"
+          echo "::error title=Deployment blocked::CodeMender found $COUNT HIGH/CRITICAL finding(s). Failing the pipeline."
+          exit 1
